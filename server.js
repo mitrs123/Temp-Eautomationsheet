@@ -31,145 +31,28 @@ const sheets = google.sheets({ version: 'v4', auth: client });
 
 // Sheet IDs
 const SPREADSHEET_ID_MASTER = '1ZN4BOvovDxFyYz-AHVFnZB-cYrvL0s48E_oLijQojTs'; // Replace with your master sheet ID
-const SPREADSHEET_ID_SALES1 = '159yCKypb4xdM0_ger3N6ls8lsT92Yob_0SIpCsnjBzQ'; // Replace with your sales1 sheet ID
-const SPREADSHEET_ID_SALES2 = '1UFJ76nUv922KOiBxu7K2Tl8nTmNZ2fAWnFP05fxeOCI'; // Replace with your sales2 sheet ID
-const SPREADSHEET_ID_SALES3 = '1KqJvOPZQsVEb26frQ32-3iyx-xW1fMgj0wNvCQH6tDo'; // Replace with your sales3 sheet ID
-
-// Sales persons mapping
-const SALES_PERSONS = {
-  'UniqueId@1': { name: 'Sales Person 1', sheetId: SPREADSHEET_ID_SALES1 },
-  'UniqueId@2': { name: 'Sales Person 2', sheetId: SPREADSHEET_ID_SALES2 },
-  'UniqueId@3': { name: 'Sales Person 3', sheetId: SPREADSHEET_ID_SALES3 }
-};
 
 // Middleware
 app.use(cors());
 app.use(bodyParser.json());
 
-// Temporary storage array
-let tempDataArray = [];
-let tempDataTimeout;
-
-// Function to check for duplicate entries in a given sheet
-const checkForDuplicate = async (sheetId, range, formData) => {
+// Function to check for duplicate entries by timestamp in the master sheet
+const checkForDuplicateTimestamp = async (sheetId, timestamp) => {
   const response = await sheets.spreadsheets.values.get({
     spreadsheetId: sheetId,
-    range: range
+    range: 'Sheet1!A:A' // Assuming the timestamp is in column A
   });
 
   const rows = response.data.values;
-  const lastRows = rows.slice(-3); // Get the last 3 rows
-
-  return lastRows.some(row => (
-    row[1] === formData.timestamp.split(' ')[0] &&
-    row[2] === formData.salesPersonName &&
-    row[3] === formData.leadOrigin &&
-    row[4] === formData.clientName &&
-    row[5] === formData.expectedProjectCapacity &&
-    row[6] === formData.projectType &&
-    row[7] === formData.contactPersonName &&
-    row[8] === formData.designation &&
-    row[9] === formData.contactNumber &&
-    row[10] === formData.contactNumber2 &&
-    row[11] === formData.area &&
-    row[12] === formData.city &&
-    row[13] === formData.remarks
-  ));
+  return rows.some(row => row[0] === timestamp);
 };
 
-// Function to remove duplicate entries from a given sheet
-const removeDuplicates = async (sheetId, range) => {
-  const response = await sheets.spreadsheets.values.get({
-    spreadsheetId: sheetId,
-    range: range
-  });
-
-  const rows = response.data.values;
-  const uniqueRows = [];
-  const duplicateIndexes = [];
-
-  rows.forEach((row, index) => {
-    const rowString = JSON.stringify(row);
-    if (uniqueRows.includes(rowString)) {
-      duplicateIndexes.push(index + 1); // +1 because Sheets API is 1-indexed
-    } else {
-      uniqueRows.push(rowString);
-    }
-  });
-
-  if (duplicateIndexes.length > 0) {
-    await sheets.spreadsheets.batchUpdate({
-      spreadsheetId: sheetId,
-      resource: {
-        requests: duplicateIndexes.map(rowIndex => ({
-          deleteDimension: {
-            range: {
-              sheetId: 0,
-              dimension: 'ROWS',
-              startIndex: rowIndex - 1,
-              endIndex: rowIndex
-            }
-          }
-        }))
-      }
-    });
-  }
-};
-
-// Function to process temporary data
-const processTempData = async () => {
-  if (tempDataArray.length === 0) return;
-
-  const firstData = tempDataArray[0];
-  const isAllDataSame = tempDataArray.every(data => JSON.stringify(data) === JSON.stringify(firstData));
-
-  try {
-    if (isAllDataSame) {
-      // Append only one object to both sheets
-      await appendDataToSheets(firstData);
-    } else {
-      // Append each object separately
-      for (const data of tempDataArray) {
-        await appendDataToSheets(data);
-      }
-    }
-  } catch (error) {
-    console.error('Error processing temp data:', error);
-  } finally {
-    // Clear the temp array
-    tempDataArray = [];
-  }
-};
-
-// Function to append data to sheets
-const appendDataToSheets = async (formData) => {
-  const salesPersonInfo = SALES_PERSONS[formData.uniqueID];
-  formData.salesPersonName = salesPersonInfo.name;
-
-  const masterSheetResponse = await sheets.spreadsheets.values.get({
-    spreadsheetId: SPREADSHEET_ID_MASTER,
-    range: 'Sheet1!A:N'
-  });
-
-  const rows = masterSheetResponse.data.values;
-  const newSequenceNumber = rows.length > 1 ? parseInt(rows[rows.length - 1][0]) + 1 : 1;
-  // const date = formData.timestamp.split(' ')[0];
-
-    const dateObj = new Date(formData.timestamp);
-
-
-  // Extract date components
-const day = dateObj.getDate().toString().padStart(2, '0');
-const month = (dateObj.getMonth() + 1).toString().padStart(2, '0'); // Month is zero-based
-const year = dateObj.getFullYear().toString();
-
-// Format date in dd-mm-yyyy format
-const formattedDate = `${day}-${month}-${year}`;
-
+// Function to append data to the master sheet
+const appendDataToMasterSheet = async (formData) => {
   const newRow = [
-    newSequenceNumber,
-    formattedDate,
-    formData.salesPersonName,
+    formData.timestamp,
+    formData.emailAddress,
+    formData.uniqueID,
     formData.leadOrigin,
     formData.clientName,
     +formData.expectedProjectCapacity,
@@ -192,37 +75,28 @@ const formattedDate = `${day}-${month}-${year}`;
       values: [newRow]
     }
   });
-
-  // Append to specific sales person's sheet
-  await sheets.spreadsheets.values.append({
-    spreadsheetId: salesPersonInfo.sheetId,
-    range: 'Sheet1!A:N', // Ensure the range includes all columns including Sales Person Name
-    valueInputOption: 'RAW',
-    resource: {
-      values: [newRow]
-    }
-  });
-
-  // Check for and remove any duplicates after insertion
-  await removeDuplicates(SPREADSHEET_ID_MASTER, 'Sheet1!A:N');
-  await removeDuplicates(salesPersonInfo.sheetId, 'Sheet1!A:N');
 };
 
 // Handle form submission
-app.post('/form-data', (req, res) => {
+app.post('/form-data', async (req, res) => {
   console.log("Endpoint called");
   const formData = req.body;
-  tempDataArray.push(formData);
 
-  // If a timeout is already set, clear it
-  if (tempDataTimeout) {
-    clearTimeout(tempDataTimeout);
+  try {
+    // Check for duplicate timestamp in master sheet
+    const isDuplicate = await checkForDuplicateTimestamp(SPREADSHEET_ID_MASTER, formData.timestamp);
+
+    if (!isDuplicate) {
+      // Append data to the master sheet
+      await appendDataToMasterSheet(formData);
+      res.status(200).send('Form data received and added to master sheet');
+    } else {
+      res.status(409).send('Duplicate timestamp found, data not added');
+    }
+  } catch (error) {
+    console.error('Error processing form data:', error);
+    res.status(500).send('Internal Server Error');
   }
-
-  // Set a new timeout to process the data after 4 seconds
-  tempDataTimeout = setTimeout(processTempData, 4000);
-
-  res.status(200).send('Form data received and temporarily stored');
 });
 
 // Start the server
@@ -241,12 +115,7 @@ app.listen(port, () => {
 // dotenv.config();
 
 // const app = express();
-// const port = 3333;
-
-
-// Temporary storage array
-// let tempDataArray = [];
-// let tempDataTimeout;
+// const port = 3000;
 
 // // Google Sheets API credentials loaded from .env
 // const client_email = process.env.SERVICE_ACCOUNT_EMAIL;
@@ -283,6 +152,10 @@ app.listen(port, () => {
 // // Middleware
 // app.use(cors());
 // app.use(bodyParser.json());
+
+// // Temporary storage array
+// let tempDataArray = [];
+// let tempDataTimeout;
 
 // // Function to check for duplicate entries in a given sheet
 // const checkForDuplicate = async (sheetId, range, formData) => {
@@ -350,51 +223,49 @@ app.listen(port, () => {
 //   }
 // };
 
-// // Handle form submission
-// app.post('/form-data', async (req, res) => {
-//   console.log("end point called")
-//   const formData = req.body;
-//   const salesPersonInfo = SALES_PERSONS[formData.uniqueID];
-//   if (!salesPersonInfo) {
-//     res.status(400).send('Invalid sales person unique ID.');
-//     return;
-//   }
-//   formData.salesPersonName = salesPersonInfo.name;
+// // Function to process temporary data
+// const processTempData = async () => {
+//   if (tempDataArray.length === 0) return;
+
+//   const firstData = tempDataArray[0];
+//   const isAllDataSame = tempDataArray.every(data => JSON.stringify(data) === JSON.stringify(firstData));
 
 //   try {
-//     // Check for duplicates in the master sheet
-//     const isDuplicateInMaster = await checkForDuplicate(
-//       SPREADSHEET_ID_MASTER,
-//       'Sheet1!A:N',
-//       formData
-//     );
-
-//     // Check for duplicates in the sales person's sheet
-//     const salesSheetId = salesPersonInfo.sheetId;
-//     const isDuplicateInSales = await checkForDuplicate(
-//       salesSheetId,
-//       'Sheet1!A:N',
-//       formData
-//     );
-
-//     if (isDuplicateInMaster || isDuplicateInSales) {
-//       res.status(400).send('Duplicate entry found.');
-//       return;
+//     if (isAllDataSame) {
+//       // Append only one object to both sheets
+//       await appendDataToSheets(firstData);
+//     } else {
+//       // Append each object separately
+//       for (const data of tempDataArray) {
+//         await appendDataToSheets(data);
+//       }
 //     }
+//   } catch (error) {
+//     console.error('Error processing temp data:', error);
+//   } finally {
+//     // Clear the temp array
+//     tempDataArray = [];
+//   }
+// };
 
-//     // No duplicates found, append the data
-//     const masterSheetResponse = await sheets.spreadsheets.values.get({
-//       spreadsheetId: SPREADSHEET_ID_MASTER,
-//       range: 'Sheet1!A:N'
-//     });
+// // Function to append data to sheets
+// const appendDataToSheets = async (formData) => {
+//   const salesPersonInfo = SALES_PERSONS[formData.uniqueID];
+//   formData.salesPersonName = salesPersonInfo.name;
 
-//     const rows = masterSheetResponse.data.values;
-//     const newSequenceNumber = rows.length > 1 ? parseInt(rows[rows.length - 1][0]) + 1 : 1;
+//   const masterSheetResponse = await sheets.spreadsheets.values.get({
+//     spreadsheetId: SPREADSHEET_ID_MASTER,
+//     range: 'Sheet1!A:N'
+//   });
 
+//   const rows = masterSheetResponse.data.values;
+//   const newSequenceNumber = rows.length > 1 ? parseInt(rows[rows.length - 1][0]) + 1 : 1;
+//   // const date = formData.timestamp.split(' ')[0];
 
 //     const dateObj = new Date(formData.timestamp);
 
-// // Extract date components
+
+//   // Extract date components
 // const day = dateObj.getDate().toString().padStart(2, '0');
 // const month = (dateObj.getMonth() + 1).toString().padStart(2, '0'); // Month is zero-based
 // const year = dateObj.getFullYear().toString();
@@ -402,59 +273,67 @@ app.listen(port, () => {
 // // Format date in dd-mm-yyyy format
 // const formattedDate = `${day}-${month}-${year}`;
 
-//     const newRow = [
-//       newSequenceNumber,
-//       formattedDate,
-//       formData.salesPersonName,
-//       formData.leadOrigin,
-//       formData.clientName,
-//       +formData.expectedProjectCapacity,
-//       formData.projectType,
-//       formData.contactPersonName,
-//       formData.designation,
-//       +formData.contactNumber,
-//       +formData.contactNumber2,
-//       formData.area,
-//       formData.city,
-//       formData.remarks
-//     ];
+//   const newRow = [
+//     newSequenceNumber,
+//     formattedDate,
+//     formData.salesPersonName,
+//     formData.leadOrigin,
+//     formData.clientName,
+//     +formData.expectedProjectCapacity,
+//     formData.projectType,
+//     formData.contactPersonName,
+//     formData.designation,
+//     +formData.contactNumber,
+//     +formData.contactNumber2,
+//     formData.area,
+//     formData.city,
+//     formData.remarks
+//   ];
+//   console.log(formData)
 
+//   // Append to master sheet
+//   await sheets.spreadsheets.values.append({
+//     spreadsheetId: SPREADSHEET_ID_MASTER,
+//     range: 'Sheet1!A:N',
+//     valueInputOption: 'RAW',
+//     resource: {
+//       values: [newRow]
+//     }
+//   });
 
+//   // Append to specific sales person's sheet
+//   await sheets.spreadsheets.values.append({
+//     spreadsheetId: salesPersonInfo.sheetId,
+//     range: 'Sheet1!A:N', // Ensure the range includes all columns including Sales Person Name
+//     valueInputOption: 'RAW',
+//     resource: {
+//       values: [newRow]
+//     }
+//   });
 
+//   // Check for and remove any duplicates after insertion
+//   // await removeDuplicates(SPREADSHEET_ID_MASTER, 'Sheet1!A:N');
+//   // await removeDuplicates(salesPersonInfo.sheetId, 'Sheet1!A:N');
+// };
 
-//     // Append to master sheet
-//     await sheets.spreadsheets.values.append({
-//       spreadsheetId: SPREADSHEET_ID_MASTER,
-//       range: 'Sheet1!A:N',
-//       valueInputOption: 'RAW',
-//       resource: {
-//         values: [newRow]
-//       }
-//     });
-//     console.log("add Data:",newRow);
+// // Handle form submission
+// app.post('/form-data', (req, res) => {
+//   console.log("Endpoint called");
+//   const formData = req.body;
+//   tempDataArray.push(formData);
 
-//     // Append to specific sales person's sheet
-//     await sheets.spreadsheets.values.append({
-//       spreadsheetId: salesSheetId,
-//       range: 'Sheet1!A:N', // Ensure the range includes all columns including Sales Person Name
-//       valueInputOption: 'RAW',
-//       resource: {
-//         values: [newRow]
-//       }
-//     });
-
-//     // Check for and remove any duplicates after insertion
-//     await removeDuplicates(SPREADSHEET_ID_MASTER, 'Sheet1!A:N');
-//     await removeDuplicates(salesSheetId, 'Sheet1!A:N');
-
-//     res.status(200).send('Form data received and processed successfully');
-//   } catch (error) {
-//     console.error('Error processing form data:', error);
-//     res.status(500).send('Error processing form data');
+//   // If a timeout is already set, clear it
+//   if (tempDataTimeout) {
+//     clearTimeout(tempDataTimeout);
 //   }
+
+//   // Set a new timeout to process the data after 4 seconds
+//   tempDataTimeout = setTimeout(processTempData, 4000);
+//   res.status(200).send('Form data received and temporarily stored');
 // });
 
 // // Start the server
 // app.listen(port, () => {
 //   console.log(`Express server listening at http://localhost:${port}`);
 // });
+
