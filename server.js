@@ -40,10 +40,10 @@ app.use(bodyParser.json());
 const checkForDuplicateTimestamp = async (sheetId, timestamp) => {
   const response = await sheets.spreadsheets.values.get({
     spreadsheetId: sheetId,
-    range: 'Sheet1!A:A' // Assuming the timestamp is in column A
+    range: 'Sheet1!C:C' // Assuming the timestamp is in column A
   });
 
-  const rows = response.data.values;
+  const rows = response.data.values || [];
   return rows.some(row => row[0] === timestamp);
 };
 
@@ -55,12 +55,12 @@ const appendDataToMasterSheet = async (formData) => {
     formData.uniqueID,
     formData.leadOrigin,
     formData.clientName,
-    +formData.expectedProjectCapacity,
+    formData.expectedProjectCapacity,
     formData.projectType,
     formData.contactPersonName,
     formData.designation,
-    +formData.contactNumber,
-    +formData.contactNumber2,
+    formData.contactNumber,
+    formData.contactNumber2,
     formData.area,
     formData.city,
     formData.remarks
@@ -103,6 +103,113 @@ app.post('/form-data', async (req, res) => {
 app.listen(port, () => {
   console.log(`Express server listening at http://localhost:${port}`);
 });
+
+
+// const { google } = require('googleapis');
+// const express = require('express');
+// const bodyParser = require('body-parser');
+// const cors = require('cors');
+// const dotenv = require('dotenv');
+
+// // Load environment variables from .env file
+// dotenv.config();
+
+// const app = express();
+// const port = 3000;
+
+// // Google Sheets API credentials loaded from .env
+// const client_email = process.env.SERVICE_ACCOUNT_EMAIL;
+// let private_key = process.env.SERVICE_ACCOUNT_PRIVATE_KEY;
+// if (private_key.startsWith('"-----BEGIN PRIVATE KEY-----')) {
+//   private_key = JSON.parse(`{"key":${private_key}}`).key; // Remove escaped quotes
+// }
+
+// const project_id = process.env.PROJECT_ID;
+
+// // Google Sheets API version
+// const client = new google.auth.JWT(
+//   client_email,
+//   null,
+//   private_key,
+//   ['https://www.googleapis.com/auth/spreadsheets']
+// );
+
+// const sheets = google.sheets({ version: 'v4', auth: client });
+
+// // Sheet IDs
+// const SPREADSHEET_ID_MASTER = '1ZN4BOvovDxFyYz-AHVFnZB-cYrvL0s48E_oLijQojTs'; // Replace with your master sheet ID
+
+// // Middleware
+// app.use(cors());
+// app.use(bodyParser.json());
+
+// // Function to check for duplicate entries by timestamp in the master sheet
+// const checkForDuplicateTimestamp = async (sheetId, timestamp) => {
+//   const response = await sheets.spreadsheets.values.get({
+//     spreadsheetId: sheetId,
+//     range: 'Sheet1!A:A' // Assuming the timestamp is in column A
+//   });
+
+//   const rows = response.data.values;
+//   return rows.some(row => row[0] === timestamp);
+// };
+
+// // Function to append data to the master sheet
+// const appendDataToMasterSheet = async (formData) => {
+//   const newRow = [
+//     formData.timestamp,
+//     formData.emailAddress,
+//     formData.uniqueID,
+//     formData.leadOrigin,
+//     formData.clientName,
+//     +formData.expectedProjectCapacity,
+//     formData.projectType,
+//     formData.contactPersonName,
+//     formData.designation,
+//     +formData.contactNumber,
+//     +formData.contactNumber2,
+//     formData.area,
+//     formData.city,
+//     formData.remarks
+//   ];
+
+//   // Append to master sheet
+//   await sheets.spreadsheets.values.append({
+//     spreadsheetId: SPREADSHEET_ID_MASTER,
+//     range: 'Sheet1!A:N',
+//     valueInputOption: 'RAW',
+//     resource: {
+//       values: [newRow]
+//     }
+//   });
+// };
+
+// // Handle form submission
+// app.post('/form-data', async (req, res) => {
+//   console.log("Endpoint called");
+//   const formData = req.body;
+
+//   try {
+//     // Check for duplicate timestamp in master sheet
+//     const isDuplicate = await checkForDuplicateTimestamp(SPREADSHEET_ID_MASTER, formData.timestamp);
+
+//     if (!isDuplicate) {
+//       // Append data to the master sheet
+//       await appendDataToMasterSheet(formData);
+//       res.status(200).send('Form data received and added to master sheet');
+//     } else {
+//       res.status(409).send('Duplicate timestamp found, data not added');
+//     }
+//   } catch (error) {
+//     console.error('Error processing form data:', error);
+//     res.status(500).send('Internal Server Error');
+//   }
+// });
+
+// // Start the server
+// app.listen(port, () => {
+//   console.log(`Express server listening at http://localhost:${port}`);
+// });
 
 
 // const { google } = require('googleapis');
