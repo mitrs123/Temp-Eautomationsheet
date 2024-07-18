@@ -36,15 +36,31 @@ const SPREADSHEET_ID_MASTER = '1ZN4BOvovDxFyYz-AHVFnZB-cYrvL0s48E_oLijQojTs'; //
 app.use(cors());
 app.use(bodyParser.json());
 
-// Function to check for duplicate entries by timestamp in the master sheet
-const checkForDuplicateTimestamp = async (sheetId, timestamp) => {
+// Function to check for duplicate entries by comparing the entire row in the master sheet
+const checkForDuplicateEntry = async (sheetId, formData) => {
   const response = await sheets.spreadsheets.values.get({
     spreadsheetId: sheetId,
-    range: 'Sheet1!C:C' // Assuming the timestamp is in column A
+    range: 'Sheet1!A:N' // Assuming the relevant data is in columns A to N
   });
 
   const rows = response.data.values || [];
-  return rows.some(row => row[0] === timestamp);
+  
+  return rows.some(row => 
+    row[0] === formData.timestamp &&
+    row[1] === formData.emailAddress &&
+    row[2] === formData.uniqueID &&
+    row[3] === formData.leadOrigin &&
+    row[4] === formData.clientName &&
+    row[5] === formData.expectedProjectCapacity.toString() &&
+    row[6] === formData.projectType &&
+    row[7] === formData.contactPersonName &&
+    row[8] === formData.designation &&
+    row[9] === formData.contactNumber.toString() &&
+    row[10] === formData.contactNumber2.toString() &&
+    row[11] === formData.area &&
+    row[12] === formData.city &&
+    row[13] === formData.remarks
+  );
 };
 
 // Function to append data to the master sheet
@@ -83,15 +99,15 @@ app.post('/form-data', async (req, res) => {
   const formData = req.body;
 
   try {
-    // Check for duplicate timestamp in master sheet
-    const isDuplicate = await checkForDuplicateTimestamp(SPREADSHEET_ID_MASTER, formData.timestamp);
+    // Check for duplicate entry in master sheet
+    const isDuplicate = await checkForDuplicateEntry(SPREADSHEET_ID_MASTER, formData);
 
     if (!isDuplicate) {
       // Append data to the master sheet
       await appendDataToMasterSheet(formData);
       res.status(200).send('Form data received and added to master sheet');
     } else {
-      res.status(409).send('Duplicate timestamp found, data not added');
+      res.status(409).send('Duplicate entry found, data not added');
     }
   } catch (error) {
     console.error('Error processing form data:', error);
@@ -103,7 +119,6 @@ app.post('/form-data', async (req, res) => {
 app.listen(port, () => {
   console.log(`Express server listening at http://localhost:${port}`);
 });
-
 
 // const { google } = require('googleapis');
 // const express = require('express');
