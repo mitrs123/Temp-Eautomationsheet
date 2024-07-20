@@ -30,7 +30,7 @@ const client = new google.auth.JWT(
 const sheets = google.sheets({ version: 'v4', auth: client });
 
 // Sheet IDs
-const SPREADSHEET_ID_MASTER = '1ZN4BOvovDxFyYz-AHVFnZB-cYrvL0s48E_oLijQojTs'; // Replace with your master sheet ID
+const SPREADSHEET_ID_MASTER = '1x9qGU9-ZpMsbYV3v-PcKznqK9CU51XzuKvveg3l_1NE'; // Replace with your master sheet ID
 
 // Middleware
 app.use(cors());
