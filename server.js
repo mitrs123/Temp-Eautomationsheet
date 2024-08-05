@@ -30,10 +30,10 @@ const client = new google.auth.JWT(
 const sheets = google.sheets({ version: 'v4', auth: client });
 
 // Sheet IDs
-const SPREADSHEET_ID_MASTER = '1ZN4BOvovDxFyYz-AHVFnZB-cYrvL0s48E_oLijQojTs'; // Replace with your master sheet ID
-const SPREADSHEET_ID_SALES1 = '159yCKypb4xdM0_ger3N6ls8lsT92Yob_0SIpCsnjBzQ'; // Replace with your sales1 sheet ID
-const SPREADSHEET_ID_SALES2 = '1UFJ76nUv922KOiBxu7K2Tl8nTmNZ2fAWnFP05fxeOCI'; // Replace with your sales2 sheet ID
-const SPREADSHEET_ID_SALES3 = '1KqJvOPZQsVEb26frQ32-3iyx-xW1fMgj0wNvCQH6tDo'; // Replace with your sales3 sheet ID
+const SPREADSHEET_ID_MASTER = '1xcetIqD5BesWLlAOtRbXOu7SuM7OP9pbmjBNVHkL5OE'; // Replace with your master sheet ID
+const SPREADSHEET_ID_SALES1 = '1d3_LxjSA-1Esl0rKtZu7WbY18Y3SvJDn0R5sRX-Q9H0'; // Replace with your sales1 sheet ID
+const SPREADSHEET_ID_SALES2 = '1tvtVQ20gSN3vJPJ6KWfs-B7QX39MZfF5GZZAuFhk6Zs'; // Replace with your sales2 sheet ID
+const SPREADSHEET_ID_SALES3 = '1S0Obv2Juk7F3D8L1b-J4aaC1VWgfacm_SgcRXpBqvtM'; // Replace with your sales3 sheet ID
 
 // Sales persons mapping
 const SALES_PERSONS = {
