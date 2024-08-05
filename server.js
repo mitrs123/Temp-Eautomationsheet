@@ -3,7 +3,7 @@ const express = require('express');
 const bodyParser = require('body-parser');
 const cors = require('cors');
 const dotenv = require('dotenv');
-const { parseISO, format } = require('date-fns');
+
 
 // Load environment variables from .env file
 dotenv.config();
@@ -47,14 +47,11 @@ const SALES_PERSONS = {
 app.use(cors());
 app.use(bodyParser.json());
 
-const dateObject = parseISO(formData.date);
-const formattedDate = format(dateObject, 'dd-MM-yyyy');
-
 // Function to append data to a sheet
 const appendDataToSheet = async (sheetId, formData, includeSalespersonName) => {
   const newRow = [
     formData.leadId,
-    formattedDate,
+    +formData.date,
     formData.projectType,
     formData.leadOrigin,
     formData.clientName,
