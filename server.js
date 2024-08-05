@@ -51,7 +51,7 @@ app.use(bodyParser.json());
 const appendDataToSheet = async (sheetId, formData, includeSalespersonName) => {
   const newRow = [
     formData.leadId,
-    +formData.date,
+    Date(formData.date),
     formData.projectType,
     formData.leadOrigin,
     formData.clientName,
