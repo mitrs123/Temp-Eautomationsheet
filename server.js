@@ -46,8 +46,8 @@ const SALES_PERSONS = {
 app.use(cors());
 app.use(bodyParser.json());
 
-// Function to append data to a specific sheet
-const appendDataToSheet = async (sheetId, formData, salespersonName) => {
+// Function to append data to a sheet
+const appendDataToSheet = async (sheetId, formData, includeSalespersonName) => {
   const newRow = [
     formData.leadId,
     formData.date,
@@ -61,9 +61,12 @@ const appendDataToSheet = async (sheetId, formData, salespersonName) => {
     formData.contactNumber2,
     formData.area,
     formData.city,
-    formData.remarks,
-    salespersonName // Added salesperson name
+    formData.remarks
   ];
+
+  if (includeSalespersonName) {
+    newRow.push(formData.salespersonName); // Add salesperson name if needed
+  }
 
   // Append to the specified sheet
   await sheets.spreadsheets.values.append({
@@ -82,13 +85,20 @@ app.post('/form-data', async (req, res) => {
   const formData = req.body;
 
   try {
-    // Append data to the master sheet
-    await appendDataToSheet(SPREADSHEET_ID_MASTER, formData, 'N/A'); // 'N/A' or another placeholder for master sheet
+    // Add salesperson name to formData for processing
+    const salesperson = SALES_PERSONS[formData.salesperson];
+    if (salesperson) {
+      formData.salespersonName = salesperson.name;
+    } else {
+      formData.salespersonName = 'Unknown';
+    }
 
-    // Check if sales person exists and append data to their specific sheet
-    const salesPerson = SALES_PERSONS[formData.salesperson];
-    if (salesPerson) {
-      await appendDataToSheet(salesPerson.sheetId, formData, salesPerson.name);
+    // Append data to the master sheet
+    await appendDataToSheet(SPREADSHEET_ID_MASTER, formData, true);
+
+    // Append data to the sales person's sheet without salesperson name
+    if (salesperson) {
+      await appendDataToSheet(salesperson.sheetId, formData, false);
     }
 
     res.status(200).send('Form data received and added to master and sales sheets');
@@ -103,7 +113,6 @@ app.post('/form-data', async (req, res) => {
 app.listen(port, () => {
   console.log(`Express server listening at http://localhost:${port}`);
 });
-
 
 
 
