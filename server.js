@@ -4,7 +4,6 @@ const bodyParser = require('body-parser');
 const cors = require('cors');
 const dotenv = require('dotenv');
 
-
 // Load environment variables from .env file
 dotenv.config();
 
@@ -47,10 +46,55 @@ const SALES_PERSONS = {
 app.use(cors());
 app.use(bodyParser.json());
 
+// Function to check if a sheet exists and create it if it doesn't
+const ensureSheetExists = async (spreadsheetId, sheetTitle) => {
+  const response = await sheets.spreadsheets.get({
+    spreadsheetId: spreadsheetId,
+  });
+
+  const sheetsData = response.data.sheets;
+  const sheetExists = sheetsData.some(sheet => sheet.properties.title === sheetTitle);
+
+  if (!sheetExists) {
+    await sheets.spreadsheets.batchUpdate({
+      spreadsheetId: spreadsheetId,
+      resource: {
+        requests: [
+          {
+            addSheet: {
+              properties: {
+                title: sheetTitle,
+                gridProperties: {
+                  rowCount: 1000,
+                  columnCount: 15,
+                }
+              }
+            }
+          }
+        ]
+      }
+    });
+
+    // After creating the sheet, add headers
+    await sheets.spreadsheets.values.update({
+      spreadsheetId: spreadsheetId,
+      range: `${sheetTitle}!A1:N1`,
+      valueInputOption: 'RAW',
+      resource: {
+        values: [
+          ['Lead ID', 'Date', 'Project Type', 'Lead Origin', 'Client Name', 'Expected Project Capacity', 'Contact Person Name', 'Designation', 'Contact Number', 'Contact Number 2', 'Area', 'City', 'Remarks', 'Salesperson Name']
+        ]
+      }
+    });
+  }
+};
+
 // Function to append data to a sheet
-const appendDataToSheet = async (sheetId, formData, includeSalespersonName) => {
+const appendDataToSheet = async (sheetId, sheetTitle, formData, includeSalespersonName) => {
+  await ensureSheetExists(sheetId, sheetTitle);
+
   const newRow = [
-    formData.leadId,
+    formData.leadId || formData.eslId,
     (date => `${String(date.getDate()).padStart(2, '0')}-${String(date.getMonth() + 1).padStart(2, '0')}-${date.getFullYear()}`)(new Date(formData.date)),
     formData.projectType,
     formData.leadOrigin,
@@ -72,7 +116,7 @@ const appendDataToSheet = async (sheetId, formData, includeSalespersonName) => {
   // Append to the specified sheet
   await sheets.spreadsheets.values.append({
     spreadsheetId: sheetId,
-    range: 'Sheet1!A:N', // Adjust the range if needed
+    range: `${sheetTitle}!A:N`, // Adjust the range if needed
     valueInputOption: 'RAW',
     resource: {
       values: [newRow]
@@ -84,6 +128,7 @@ const appendDataToSheet = async (sheetId, formData, includeSalespersonName) => {
 app.post('/form-data', async (req, res) => {
   console.log("Endpoint called");
   const formData = req.body;
+  const sheetTitle = formData.leadId ? 'Lead Data' : 'ESL Data';
 
   try {
     // Add salesperson name to formData for processing
@@ -95,16 +140,15 @@ app.post('/form-data', async (req, res) => {
     }
 
     // Append data to the master sheet
-    await appendDataToSheet(SPREADSHEET_ID_MASTER, formData, true);
+    await appendDataToSheet(SPREADSHEET_ID_MASTER, sheetTitle, formData, true);
 
     // Append data to the sales person's sheet without salesperson name
     if (salesperson) {
-      await appendDataToSheet(salesperson.sheetId, formData, false);
+      await appendDataToSheet(salesperson.sheetId, sheetTitle, formData, false);
     }
 
     res.status(200).send('Form data received and added to master and sales sheets');
-  } 
-  catch (error) {
+  } catch (error) {
     console.error('Error processing form data:', error);
     res.status(500).send('Internal Server Error');
   }
@@ -114,6 +158,125 @@ app.post('/form-data', async (req, res) => {
 app.listen(port, () => {
   console.log(`Express server listening at http://localhost:${port}`);
 });
+
+
+// {const { google } = require('googleapis');
+// const express = require('express');
+// const bodyParser = require('body-parser');
+// const cors = require('cors');
+// const dotenv = require('dotenv');
+
+
+// // Load environment variables from .env file
+// dotenv.config();
+
+// const app = express();
+// const port = 3000;
+
+// // Google Sheets API credentials loaded from .env
+// const client_email = process.env.SERVICE_ACCOUNT_EMAIL;
+// let private_key = process.env.SERVICE_ACCOUNT_PRIVATE_KEY;
+// if (private_key.startsWith('"-----BEGIN PRIVATE KEY-----')) {
+//   private_key = JSON.parse(`{"key":${private_key}}`).key; // Remove escaped quotes
+// }
+
+// const project_id = process.env.PROJECT_ID;
+
+// // Google Sheets API version
+// const client = new google.auth.JWT(
+//   client_email,
+//   null,
+//   private_key,
+//   ['https://www.googleapis.com/auth/spreadsheets']
+// );
+
+// const sheets = google.sheets({ version: 'v4', auth: client });
+
+// // Sheet IDs
+// const SPREADSHEET_ID_MASTER = '1xcetIqD5BesWLlAOtRbXOu7SuM7OP9pbmjBNVHkL5OE'; // Replace with your master sheet ID
+// const SPREADSHEET_ID_SALES1 = '1d3_LxjSA-1Esl0rKtZu7WbY18Y3SvJDn0R5sRX-Q9H0'; // Replace with your sales1 sheet ID
+// const SPREADSHEET_ID_SALES2 = '1tvtVQ20gSN3vJPJ6KWfs-B7QX39MZfF5GZZAuFhk6Zs'; // Replace with your sales2 sheet ID
+// const SPREADSHEET_ID_SALES3 = '1S0Obv2Juk7F3D8L1b-J4aaC1VWgfacm_SgcRXpBqvtM'; // Replace with your sales3 sheet ID
+
+// // Sales persons mapping
+// const SALES_PERSONS = {
+//   'User1': { name: 'Sales Person 1', sheetId: SPREADSHEET_ID_SALES1 },
+//   'User2': { name: 'Sales Person 2', sheetId: SPREADSHEET_ID_SALES2 },
+//   'User3': { name: 'Sales Person 3', sheetId: SPREADSHEET_ID_SALES3 }
+// };
+
+// // Middleware
+// app.use(cors());
+// app.use(bodyParser.json());
+
+// // Function to append data to a sheet
+// const appendDataToSheet = async (sheetId, formData, includeSalespersonName) => {
+//   const newRow = [
+//     formData.leadId,
+//     (date => `${String(date.getDate()).padStart(2, '0')}-${String(date.getMonth() + 1).padStart(2, '0')}-${date.getFullYear()}`)(new Date(formData.date)),
+//     formData.projectType,
+//     formData.leadOrigin,
+//     formData.clientName,
+//     +formData.expectedProjectCapacity,
+//     formData.contactPersonName,
+//     formData.designation,
+//     +formData.contactNumber,
+//     +formData.contactNumber2,
+//     formData.area,
+//     formData.city,
+//     formData.remarks
+//   ];
+
+//   if (includeSalespersonName) {
+//     newRow.push(formData.salespersonName); // Add salesperson name if needed
+//   }
+
+//   // Append to the specified sheet
+//   await sheets.spreadsheets.values.append({
+//     spreadsheetId: sheetId,
+//     range: 'Sheet1!A:N', // Adjust the range if needed
+//     valueInputOption: 'RAW',
+//     resource: {
+//       values: [newRow]
+//     }
+//   });
+// };
+
+// // Handle form submission
+// app.post('/form-data', async (req, res) => {
+//   console.log("Endpoint called");
+//   const formData = req.body;
+
+//   try {
+//     // Add salesperson name to formData for processing
+//     const salesperson = SALES_PERSONS[formData.salesperson];
+//     if (salesperson) {
+//       formData.salespersonName = salesperson.name;
+//     } else {
+//       formData.salespersonName = 'Unknown';
+//     }
+
+//     // Append data to the master sheet
+//     await appendDataToSheet(SPREADSHEET_ID_MASTER, formData, true);
+
+//     // Append data to the sales person's sheet without salesperson name
+//     if (salesperson) {
+//       await appendDataToSheet(salesperson.sheetId, formData, false);
+//     }
+
+//     res.status(200).send('Form data received and added to master and sales sheets');
+//   } 
+//   catch (error) {
+//     console.error('Error processing form data:', error);
+//     res.status(500).send('Internal Server Error');
+//   }
+// });
+
+// // Start the server
+// app.listen(port, () => {
+//   console.log(`Express server listening at http://localhost:${port}`);
+// });} datetime : 11-08-2024/00:04
+
 
 
 
