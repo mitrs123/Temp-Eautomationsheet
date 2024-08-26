@@ -8,7 +8,7 @@ const dotenv = require('dotenv');
 dotenv.config();
 
 const app = express();
-const port = 3000;
+const port = 3333;
 
 // Google Sheets API credentials loaded from .env
 const client_email = process.env.SERVICE_ACCOUNT_EMAIL;
@@ -17,9 +17,6 @@ if (private_key.startsWith('"-----BEGIN PRIVATE KEY-----')) {
   private_key = JSON.parse(`{"key":${private_key}}`).key; // Remove escaped quotes
 }
 
-const project_id = process.env.PROJECT_ID;
-
-// Google Sheets API version
 const client = new google.auth.JWT(
   client_email,
   null,
@@ -42,81 +39,85 @@ const SALES_PERSONS = {
   'User3': { name: 'Sales Person 3', sheetId: SPREADSHEET_ID_SALES3 }
 };
 
+// Define headers for Lead and ESL sheets
+const LEAD_HEADERS = [
+  "leadId", "date", "projectType", "leadOrigin", "clientName", "expectedProjectCapacity",
+  "contactPersonName", "designation", "contactNumber", "contactNumber2", "area", "pincode",
+  "city", "remarks", "salesperson"
+];
+
+const ESL_HEADERS = [
+  "eslNumber", "date", "projectType", "projectPortalType", "leadId", "leadOrigin", "name",
+  "expectedTentativeCapacity", "finalProjectCapacity", "consumerNumber", "discom", "contactPerson",
+  "designation", "contactNumber", "contactNumber2", "area", "pincode", "city", "remarksNotes",
+  "solarPanelsType", "panelMake1", "panelMake2", "inverter", "structure", "specialRemarks",
+  "pricePerKw", "gedaCharges", "meteringCharges", "paymentTerms", "specialCommercialRemarks",
+  "leadAddedBy", "addedBy"
+];
+
 // Middleware
 app.use(cors());
 app.use(bodyParser.json());
 
-// Function to check if a sheet exists and create it if it doesn't
-const ensureSheetExists = async (spreadsheetId, sheetTitle) => {
-  const response = await sheets.spreadsheets.get({
-    spreadsheetId: spreadsheetId,
+// Helper function to ensure sheet and headers
+const ensureSheetAndHeaders = async (spreadsheetId, sheetName, headers) => {
+  const sheetExists = await sheets.spreadsheets.get({
+    spreadsheetId,
+  }).then(response => {
+    const sheet = response.data.sheets.find(sheet => sheet.properties.title === sheetName);
+    return !!sheet;
   });
 
-  const sheetsData = response.data.sheets;
-  const sheetExists = sheetsData.some(sheet => sheet.properties.title === sheetTitle);
-
   if (!sheetExists) {
+    // Create the sheet
     await sheets.spreadsheets.batchUpdate({
-      spreadsheetId: spreadsheetId,
+      spreadsheetId,
       resource: {
         requests: [
           {
             addSheet: {
               properties: {
-                title: sheetTitle,
-                gridProperties: {
-                  rowCount: 1000,
-                  columnCount: 15,
-                }
+                title: sheetName
               }
             }
           }
         ]
       }
     });
+  }
 
-    // After creating the sheet, add headers
+  // Check if headers exist
+  const headerRow = await sheets.spreadsheets.values.get({
+    spreadsheetId,
+    range: `${sheetName}!A1:${String.fromCharCode(65 + headers.length)}1`
+});
+
+  if (!headerRow.data.values || headerRow.data.values[0].length !== headers.length) {
+    // Set headers if they don't match
     await sheets.spreadsheets.values.update({
-      spreadsheetId: spreadsheetId,
-      range: `${sheetTitle}!A1:N1`,
+      spreadsheetId,
+      range: `${sheetName}!A1`,
       valueInputOption: 'RAW',
       resource: {
-        values: [
-          ['Lead ID', 'Date', 'Project Type', 'Lead Origin', 'Client Name', 'Expected Project Capacity', 'Contact Person Name', 'Designation', 'Contact Number', 'Contact Number 2', 'Area', 'City', 'Remarks', 'Salesperson Name']
-        ]
+        values: [headers]
       }
     });
   }
 };
 
 // Function to append data to a sheet
-const appendDataToSheet = async (sheetId, sheetTitle, formData, includeSalespersonName) => {
-  await ensureSheetExists(sheetId, sheetTitle);
+const appendDataToSheet = async (spreadsheetId, sheetName, formData, headers, includeSalespersonName = false) => {
+  await ensureSheetAndHeaders(spreadsheetId, sheetName, headers);
 
-  const newRow = [
-    formData.leadId || formData.eslId,
-    (date => `${String(date.getDate()).padStart(2, '0')}-${String(date.getMonth() + 1).padStart(2, '0')}-${date.getFullYear()}`)(new Date(formData.date)),
-    formData.projectType,
-    formData.leadOrigin,
-    formData.clientName,
-    +formData.expectedProjectCapacity,
-    formData.contactPersonName,
-    formData.designation,
-    +formData.contactNumber,
-    +formData.contactNumber2,
-    formData.area,
-    formData.city,
-    formData.remarks
-  ];
+  const newRow = headers.map(header => formData[header] || '');
 
   if (includeSalespersonName) {
-    newRow.push(formData.salespersonName); // Add salesperson name if needed
+    newRow.push(formData.salespersonName);
   }
 
-  // Append to the specified sheet
   await sheets.spreadsheets.values.append({
-    spreadsheetId: sheetId,
-    range: `${sheetTitle}!A:N`, // Adjust the range if needed
+    spreadsheetId,
+    range: `${sheetName}!A:${String.fromCharCode(65 + headers.length)}`, // Adjust range based on headers length
     valueInputOption: 'RAW',
     resource: {
       values: [newRow]
@@ -128,27 +129,31 @@ const appendDataToSheet = async (sheetId, sheetTitle, formData, includeSalespers
 app.post('/form-data', async (req, res) => {
   console.log("Endpoint called");
   const formData = req.body;
-  const sheetTitle = formData.leadId ? 'Lead Data' : 'ESL Data';
+  console.log(formData)
 
   try {
-    // Add salesperson name to formData for processing
     const salesperson = SALES_PERSONS[formData.salesperson];
-    if (salesperson) {
-      formData.salespersonName = salesperson.name;
+    formData.salespersonName = salesperson ? salesperson.name : 'Unknown';
+
+    if (formData.eslNumber) {
+      // ESL data
+      await appendDataToSheet(SPREADSHEET_ID_MASTER, "ESL_Sheet", formData, ESL_HEADERS, true);
+      if (salesperson) {
+        await appendDataToSheet(salesperson.sheetId, "ESL_Sheet", formData, ESL_HEADERS, false);
+      }
+    } else if (formData.leadId) {
+      // Lead data
+      await appendDataToSheet(SPREADSHEET_ID_MASTER, "Lead_Sheet", formData, LEAD_HEADERS, true);
+      if (salesperson) {
+        await appendDataToSheet(salesperson.sheetId, "Lead_Sheet", formData, LEAD_HEADERS, false);
+      }
     } else {
-      formData.salespersonName = 'Unknown';
+      throw new Error("Form data must contain either leadId or eslNumber.");
     }
 
-    // Append data to the master sheet
-    await appendDataToSheet(SPREADSHEET_ID_MASTER, sheetTitle, formData, true);
-
-    // Append data to the sales person's sheet without salesperson name
-    if (salesperson) {
-      await appendDataToSheet(salesperson.sheetId, sheetTitle, formData, false);
-    }
-
-    res.status(200).send('Form data received and added to master and sales sheets');
-  } catch (error) {
+    res.status(200).send('Form data received and added to the relevant sheets');
+  } 
+  catch (error) {
     console.error('Error processing form data:', error);
     res.status(500).send('Internal Server Error');
   }
@@ -158,6 +163,7 @@ app.post('/form-data', async (req, res) => {
 app.listen(port, () => {
   console.log(`Express server listening at http://localhost:${port}`);
 });
+
 
 
 // {const { google } = require('googleapis');
@@ -868,3 +874,52 @@ app.listen(port, () => {
 //   console.log(`Express server listening at http://localhost:${port}`);
 // });
 
+
+// {
+// const ensureSheetAndHeaders = async (spreadsheetId, sheetName, headers) => {
+//   const lastColumnLetter = String.fromCharCode(64 + headers.length);
+//   const range = `${sheetName}!A1:${lastColumnLetter}1`;
+
+//   console.log('Generated Range:', range); // Debugging statement
+
+//   const sheetExists = await sheets.spreadsheets.get({
+//     spreadsheetId,
+//   }).then(response => {
+//     const sheet = response.data.sheets.find(sheet => sheet.properties.title === sheetName);
+//     return !!sheet;
+//   });
+
+//   if (!sheetExists) {
+//     await sheets.spreadsheets.batchUpdate({
+//       spreadsheetId,
+//       resource: {
+//         requests: [
+//           {
+//             addSheet: {
+//               properties: {
+//                 title: sheetName
+//               }
+//             }
+//           }
+//         ]
+//       }
+//     });
+//   }
+
+//   const headerRow = await sheets.spreadsheets.values.get({
+//     spreadsheetId,
+//     range: range
+//   });
+
+//   if (!headerRow.data.values || headerRow.data.values[0].length !== headers.length) {
+//     await sheets.spreadsheets.values.update({
+//       spreadsheetId,
+//       range: `${sheetName}!A1`,
+//       valueInputOption: 'RAW',
+//       resource: {
+//         values: [headers]
+//       }
+//     });
+//   }
+// };
+// }
