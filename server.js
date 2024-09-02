@@ -98,7 +98,7 @@ const ensureSheetAndHeaders = async (spreadsheetId, sheetName, headers) => {
         sheetExists = true;
       }
     });
-
+ 
     // Create the sheet if it doesn't exist
     if (!sheetExists) {
       await sheets.spreadsheets.batchUpdate({
