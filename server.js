@@ -32,8 +32,8 @@ const SPREADSHEET_ID_SALES4 = "1nwJ-Uo7RVcXUtXuSE-PkG25kpc_GF1aA82nWN0WuwJI"; //
 const SPREADSHEET_ID_SALES5 = "1gB0l50xioy_-5Q7qIeZ-ZAGgHJycuh6FCLVhl6jOvcs"; // Replace with your sales5 sheet ID
 const SPREADSHEET_ID_SALES6 = "1pv_WOHLnrcXQ5VaeCr8f51Vf48UvueOOU7FOw-AJGFo"; // Replace with your sales6 sheet ID
 const SPREADSHEET_ID_SALES7 = "14j4_EKrY2NXOxnAXpu6MPUdDOjioxR4t_y_95x1hgLs"; // Replace with your sales7 sheet ID
-const SPREADSHEET_ID_SALES8 = "18b6e92gXN5w9vFiREWgOVerb7RlhR9V861NpXWWWJ0I"; // Replace with your sales7 sheet ID
-const SPREADSHEET_ID_SALES9 = "1Ql1jOzipJQHb5A_loA9AM1pvL7SidCnCV5IXvbs3Sqo"; // Replace with your sales7 sheet ID
+const SPREADSHEET_ID_SALES8 = "18b6e92gXN5w9vFiREWgOVerb7RlhR9V861NpXWWWJ0I"; // Replace with your sales8 sheet ID
+const SPREADSHEET_ID_SALES9 = "1Ql1jOzipJQHb5A_loA9AM1pvL7SidCnCV5IXvbs3Sqo"; // Replace with your sales9 sheet ID
 
 // Sales persons mapping
 const SALES_PERSONS = {
@@ -266,115 +266,91 @@ const appendDataToSheet = async (spreadsheetId, sheetName, data, headers) => {
       case "ESL Number":
         return data.eslNumber || "";
       case "Final Capacity":
-        return +data.finalProjectCapacity || "";
+        return +data.finalCapacity || "";
       case "Consumer Number":
-        return data.consumerNumber || "";
+        return +data.consumerNumber || "";
+      case "Application Number":
+        return data.applicationNumber || "";
       case "Address":
-        return `${data.area || ""}, ${data.city || ""}, ${data.pincode || ""}`;
+        return data.address || "";
       case "Discom":
         return data.discom || "";
       case "Exe Time Contact Person":
         return data.exeTimeContactPerson || "";
       case "Exe Time Contact Number":
         return +data.exeTimeContactNumber || "";
-      case "Date (Blank)":
-      case "Application Number (Blank)":
-        return ""; // For blank columns
       default:
-        return ""; // Fallback
+        return "";
     }
   });
 
   await sheets.spreadsheets.values.append({
     spreadsheetId,
-    range: `'${sheetName}'!A1`,
+    range: `'${sheetName}'!A2:${String.fromCharCode(65 + headers.length - 1)}`,
     valueInputOption: "RAW",
-    resource: { values: [values] },
+    resource: {
+      values: [values],
+    },
   });
 };
 
-// Handle form submission
+// Route to handle lead submission
 app.post("/form-data", async (req, res) => {
-  console.log("Endpoint called");
-  const formData = req.body;
-  console.log(formData);
+  const data = req.body;
+  const salespersonEmail = data.salespersonEmail;
+
+  if (!SALES_PERSONS[salespersonEmail]) {
+    return res.status(400).json({ error: "Invalid salesperson email" });
+  }
+
+  const salesperson = SALES_PERSONS[salespersonEmail];
+  const sheetIdSalesPerson = salesperson.sheetId;
 
   try {
-    const salesperson = SALES_PERSONS[formData.salesperson];
-    // formData.salespersonName = salesperson ? salesperson.name : 'Unknown';
-    if (formData.salespersonName) {
-      if (formData.eslNumber) {
-        // ESL data
-        await ensureSheetAndHeaders(
-          SPREADSHEET_ID_MASTER,
-          "ESL Sheet",
-          ESL_HEADERS_MASTER
-        );
-        await appendDataToSheet(
-          SPREADSHEET_ID_MASTER,
-          "ESL Sheet",
-          formData,
-          ESL_HEADERS_MASTER
-        );
-        if (salesperson) {
-          await ensureSheetAndHeaders(
-            salesperson.sheetId,
-            "ESL Sheet",
-            ESL_HEADERS_SALESPERSON
-          );
-          await appendDataToSheet(
-            salesperson.sheetId,
-            "ESL Sheet",
-            formData,
-            ESL_HEADERS_SALESPERSON
-          );
-        }
-      } else if (formData.leadId) {
-        // Lead data
-        await ensureSheetAndHeaders(
-          SPREADSHEET_ID_MASTER,
-          "Lead Sheet",
-          LEAD_HEADERS_MASTER
-        );
-        await appendDataToSheet(
-          SPREADSHEET_ID_MASTER,
-          "Lead Sheet",
-          formData,
-          LEAD_HEADERS_MASTER
-        );
-        if (salesperson) {
-          await ensureSheetAndHeaders(
-            salesperson.sheetId,
-            "Lead Sheet",
-            LEAD_HEADERS_SALESPERSON
-          );
-          await appendDataToSheet(
-            salesperson.sheetId,
-            "Lead Sheet",
-            formData,
-            LEAD_HEADERS_SALESPERSON
-          );
-        }
-      } else {
-        throw new Error("Form data must contain either leadId or eslNumber.");
-      }
+    await ensureSheetAndHeaders(SPREADSHEET_ID_MASTER, "Lead", LEAD_HEADERS_MASTER);
+    await ensureSheetAndHeaders(sheetIdSalesPerson, "Lead", LEAD_HEADERS_SALESPERSON);
 
-      res
-        .status(200)
-        .send("Form data received and added to the relevant sheets");
-    } else {
-      console.error("User Not Found", error);
-    }
+    await appendDataToSheet(SPREADSHEET_ID_MASTER, "Lead", data, LEAD_HEADERS_MASTER);
+    await appendDataToSheet(sheetIdSalesPerson, "Lead", data, LEAD_HEADERS_SALESPERSON);
+
+    res.status(200).json({ message: "Lead data submitted successfully" });
   } catch (error) {
-    console.error("Error processing form data:", error);
-    res.status(500).send("Internal Server Error");
+    console.error("Error submitting lead data:", error);
+    res.status(500).json({ error: "Failed to submit lead data" });
+  }
+});
+
+// Route to handle ESL submission
+app.post("/submit-esl", async (req, res) => {
+  const data = req.body;
+  const salespersonEmail = data.salespersonEmail;
+
+  if (!SALES_PERSONS[salespersonEmail]) {
+    return res.status(400).json({ error: "Invalid salesperson email" });
+  }
+
+  const salesperson = SALES_PERSONS[salespersonEmail];
+  const sheetIdSalesPerson = salesperson.sheetId;
+
+  try {
+    await ensureSheetAndHeaders(SPREADSHEET_ID_MASTER, "ESL", ESL_HEADERS_MASTER);
+    await ensureSheetAndHeaders(sheetIdSalesPerson, "ESL", ESL_HEADERS_SALESPERSON);
+
+    await appendDataToSheet(SPREADSHEET_ID_MASTER, "ESL", data, ESL_HEADERS_MASTER);
+    await appendDataToSheet(sheetIdSalesPerson, "ESL", data, ESL_HEADERS_SALESPERSON);
+
+    res.status(200).json({ message: "ESL data submitted successfully" });
+  } catch (error) {
+    console.error("Error submitting ESL data:", error);
+    res.status(500).json({ error: "Failed to submit ESL data" });
   }
 });
 
 // Start the server
 app.listen(port, () => {
-  console.log(`Express server listening at http://localhost:${port}`);
+  console.log(`Server running on port ${port}`);
 });
+
 
 // const { google } = require('googleapis');
 // const express = require('express');
