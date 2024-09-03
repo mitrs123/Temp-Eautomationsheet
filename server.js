@@ -49,27 +49,27 @@ const SALES_PERSONS = {
 
 // Headers for Lead and ESL Sheets in Master Sheet
 const LEAD_HEADERS_MASTER = [
-  "Lead ID", "Date", "Sales Person Name", "Project Type", "Lead Origin", "Client Name", 
+  "Lead ID", " Created Date", "Sales Person Name", "Project Type", "Lead Origin", "Client Name", 
   "Expected Tentative Capacity", "Contact Person 1", "Designation 1", "Contact Number 1", 
   "Contact Person 2", "Designation 2", "Contact Number 2", "Area", "Pincode", 
   "City", "Co-Ordinates", "Remarks"
 ];
 
 const LEAD_HEADERS_SALESPERSON = [
-  "Lead ID", "Date", "Project Type", "Lead Origin", "Client Name", 
+  "Lead ID", "Created Date", "Project Type", "Lead Origin", "Client Name", 
   "Expected Tentative Capacity", "Contact Person 1", "Designation 1", "Contact Number 1", 
   "Contact Person 2", "Designation 2", "Contact Number 2", "Area", "Pincode", 
   "City", "Co-Ordinates", "Remarks"
 ];
 
 const ESL_HEADERS_MASTER = [
-  "Date", "Lead ID", "ESL Number", "Sales Person Name", "Project Type", "Date", 
+  "Created Date", "Lead ID", "ESL Number", "Sales Person Name", "Project Type", "Date", 
   "Client Name", "Final Capacity", "Consumer Number", "Application Number", 
   "Address", "Co-Ordinates", "Discom", "Exe Time Contact Person", "Exe Time Contact Number"
 ];
 
 const ESL_HEADERS_SALESPERSON = [
-  "Date", "Lead ID", "ESL Number", "Project Type", "Date (Blank)", 
+  "Created Date", "Lead ID", "ESL Number", "Project Type", "Date", 
   "Client Name", "Final Capacity", "Consumer Number", "Application Number (Blank)", 
   "Address", "Co-Ordinates", "Discom", "Exe Time Contact Person", "Exe Time Contact Number"
 ];
@@ -143,7 +143,7 @@ const appendDataToSheet = async (spreadsheetId, sheetName, data, headers) => {
     switch (header) {
       case "Lead ID":
         return data.leadId || '';
-      case "Date":
+      case "Created Date":
         return data.date ? formatDate(data.date) : '';
       case "Sales Person Name":
         return data.salespersonName || '';
@@ -191,7 +191,7 @@ const appendDataToSheet = async (spreadsheetId, sheetName, data, headers) => {
         return data.exeTimeContactPerson || '';
       case "Exe Time Contact Number":
         return data.exeTimeContactNumber || '';
-      case "Date (Blank)":
+      case "Date":
       case "Application Number (Blank)":
         return ''; // For blank columns
       default:
