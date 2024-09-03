@@ -364,7 +364,6 @@ app.post("/form-data", async (req, res) => {
         .send("Form data received and added to the relevant sheets");
     } else {
       console.error("User Not Found", error);
-      res.status(404).send("User Not Found");
     }
   } catch (error) {
     console.error("Error processing form data:", error);
