@@ -14,7 +14,7 @@ const port = 3333;
 const client_email = process.env.SERVICE_ACCOUNT_EMAIL;
 let private_key = process.env.SERVICE_ACCOUNT_PRIVATE_KEY;
 if (private_key.startsWith('"-----BEGIN PRIVATE KEY-----')) {
-  private_key = JSON.parse(`{"key":${private_key}}`).key; // Remove escaped quotes
+  private_key = JSON.parse({ "key": private_key }).key; // Remove escaped quotes
 }
 
 const client = new google.auth.JWT(client_email, null, private_key, [
@@ -263,94 +263,444 @@ const appendDataToSheet = async (spreadsheetId, sheetName, data, headers) => {
         return data.coordinates || "";
       case "Remarks":
         return data.remarks || "";
-      case "ESL Number":
-        return data.eslNumber || "";
-      case "Final Capacity":
-        return +data.finalCapacity || "";
-      case "Consumer Number":
-        return +data.consumerNumber || "";
-      case "Application Number":
-        return data.applicationNumber || "";
-      case "Address":
-        return data.address || "";
-      case "Discom":
-        return data.discom || "";
-      case "Exe Time Contact Person":
-        return data.exeTimeContactPerson || "";
-      case "Exe Time Contact Number":
-        return +data.exeTimeContactNumber || "";
       default:
         return "";
     }
   });
 
-  await sheets.spreadsheets.values.append({
-    spreadsheetId,
-    range: `'${sheetName}'!A2:${String.fromCharCode(65 + headers.length - 1)}`,
-    valueInputOption: "RAW",
-    resource: {
-      values: [values],
-    },
-  });
+  try {
+    const response = await sheets.spreadsheets.values.append({
+      spreadsheetId,
+      range: `${sheetName}!A1`,
+      valueInputOption: "RAW",
+      resource: { values: [values] },
+    });
+
+    console.log("Appended data to sheet:", response.data.updates.updatedRange);
+  } catch (error) {
+    console.error("Error appending data to sheet:", error);
+  }
 };
 
-// Route to handle lead submission
+// Endpoint to receive data and append it to sheets
 app.post("/form-data", async (req, res) => {
-  const data = req.body;
-  const salespersonEmail = data.salespersonEmail;
+  const { email, leadData, eslData } = req.body;
 
-  if (!SALES_PERSONS[salespersonEmail]) {
-    return res.status(400).json({ error: "Invalid salesperson email" });
+  if (!email || !leadData) {
+    return res.status(400).send("Email and leadData are required.");
   }
 
-  const salesperson = SALES_PERSONS[salespersonEmail];
-  const sheetIdSalesPerson = salesperson.sheetId;
+  const salesperson = SALES_PERSONS[email];
+
+  if (!salesperson) {
+    return res.status(400).send("Invalid salesperson email.");
+  }
 
   try {
-    await ensureSheetAndHeaders(SPREADSHEET_ID_MASTER, "Lead", LEAD_HEADERS_MASTER);
-    await ensureSheetAndHeaders(sheetIdSalesPerson, "Lead", LEAD_HEADERS_SALESPERSON);
+    // Append data to master sheet
+    await ensureSheetAndHeaders(
+      SPREADSHEET_ID_MASTER,
+      "Leads",
+      LEAD_HEADERS_MASTER
+    );
+    await appendDataToSheet(
+      SPREADSHEET_ID_MASTER,
+      "Leads",
+      { ...leadData, salespersonName: salesperson.name },
+      LEAD_HEADERS_MASTER
+    );
 
-    await appendDataToSheet(SPREADSHEET_ID_MASTER, "Lead", data, LEAD_HEADERS_MASTER);
-    await appendDataToSheet(sheetIdSalesPerson, "Lead", data, LEAD_HEADERS_SALESPERSON);
+    // Append data to salesperson's sheet
+    await ensureSheetAndHeaders(
+      salesperson.sheetId,
+      "Leads",
+      LEAD_HEADERS_SALESPERSON
+    );
+    await appendDataToSheet(
+      salesperson.sheetId,
+      "Leads",
+      leadData,
+      LEAD_HEADERS_SALESPERSON
+    );
 
-    res.status(200).json({ message: "Lead data submitted successfully" });
+    // Process ESL data if provided
+    if (eslData) {
+      await ensureSheetAndHeaders(
+        SPREADSHEET_ID_MASTER,
+        "ESL",
+        ESL_HEADERS_MASTER
+      );
+      await appendDataToSheet(
+        SPREADSHEET_ID_MASTER,
+        "ESL",
+        { ...eslData, salespersonName: salesperson.name },
+        ESL_HEADERS_MASTER
+      );
+
+      await ensureSheetAndHeaders(
+        salesperson.sheetId,
+        "ESL",
+        ESL_HEADERS_SALESPERSON
+      );
+      await appendDataToSheet(
+        salesperson.sheetId,
+        "ESL",
+        eslData,
+        ESL_HEADERS_SALESPERSON
+      );
+    }
+
+    res.status(200).send("Data submitted successfully.");
   } catch (error) {
-    console.error("Error submitting lead data:", error);
-    res.status(500).json({ error: "Failed to submit lead data" });
-  }
-});
-
-// Route to handle ESL submission
-app.post("/submit-esl", async (req, res) => {
-  const data = req.body;
-  const salespersonEmail = data.salespersonEmail;
-
-  if (!SALES_PERSONS[salespersonEmail]) {
-    return res.status(400).json({ error: "Invalid salesperson email" });
-  }
-
-  const salesperson = SALES_PERSONS[salespersonEmail];
-  const sheetIdSalesPerson = salesperson.sheetId;
-
-  try {
-    await ensureSheetAndHeaders(SPREADSHEET_ID_MASTER, "ESL", ESL_HEADERS_MASTER);
-    await ensureSheetAndHeaders(sheetIdSalesPerson, "ESL", ESL_HEADERS_SALESPERSON);
-
-    await appendDataToSheet(SPREADSHEET_ID_MASTER, "ESL", data, ESL_HEADERS_MASTER);
-    await appendDataToSheet(sheetIdSalesPerson, "ESL", data, ESL_HEADERS_SALESPERSON);
-
-    res.status(200).json({ message: "ESL data submitted successfully" });
-  } catch (error) {
-    console.error("Error submitting ESL data:", error);
-    res.status(500).json({ error: "Failed to submit ESL data" });
+    console.error("Error processing data:", error);
+    res.status(500).send("Internal server error.");
   }
 });
 
 // Start the server
 app.listen(port, () => {
-  console.log(`Server running on port ${port}`);
+  console.log(`Server running on http://localhost:${port}`);
 });
 
+
+
+{// const { google } = require("googleapis");
+// const express = require("express");
+// const bodyParser = require("body-parser");
+// const cors = require("cors");
+// const dotenv = require("dotenv");
+
+// // Load environment variables from .env file
+// dotenv.config();
+
+// const app = express();
+// const port = 3333;
+
+// // Google Sheets API credentials loaded from .env
+// const client_email = process.env.SERVICE_ACCOUNT_EMAIL;
+// let private_key = process.env.SERVICE_ACCOUNT_PRIVATE_KEY;
+// if (private_key.startsWith('"-----BEGIN PRIVATE KEY-----')) {
+//   private_key = JSON.parse(`{"key":${private_key}}`).key; // Remove escaped quotes
+// }
+
+// const client = new google.auth.JWT(client_email, null, private_key, [
+//   "https://www.googleapis.com/auth/spreadsheets",
+// ]);
+
+// const sheets = google.sheets({ version: "v4", auth: client });
+
+// // Sheet IDs
+// const SPREADSHEET_ID_MASTER = "1OaKEgNWWUEi1LLHyTVCoJMMeTQ4TE7NuB2Zwy4lFTzo"; // Replace with your master sheet ID
+// const SPREADSHEET_ID_SALES1 = "1_eU7YevVyWs6OlGem4js_qL7KKYXDNXlloQVVIhyApc"; // Replace with your sales1 sheet ID
+// const SPREADSHEET_ID_SALES2 = "1GwKY8MY8aKEudRG6v-hKIUrjZd0WrV5KGAKpOBcvYCA"; // Replace with your sales2 sheet ID
+// const SPREADSHEET_ID_SALES3 = "10yCa--HOn4mBBsQXhEsj5FGeddEGvv776ZcRG29A014"; // Replace with your sales3 sheet ID
+// const SPREADSHEET_ID_SALES4 = "1nwJ-Uo7RVcXUtXuSE-PkG25kpc_GF1aA82nWN0WuwJI"; // Replace with your sales4 sheet ID
+// const SPREADSHEET_ID_SALES5 = "1gB0l50xioy_-5Q7qIeZ-ZAGgHJycuh6FCLVhl6jOvcs"; // Replace with your sales5 sheet ID
+// const SPREADSHEET_ID_SALES6 = "1pv_WOHLnrcXQ5VaeCr8f51Vf48UvueOOU7FOw-AJGFo"; // Replace with your sales6 sheet ID
+// const SPREADSHEET_ID_SALES7 = "14j4_EKrY2NXOxnAXpu6MPUdDOjioxR4t_y_95x1hgLs"; // Replace with your sales7 sheet ID
+// const SPREADSHEET_ID_SALES8 = "18b6e92gXN5w9vFiREWgOVerb7RlhR9V861NpXWWWJ0I"; // Replace with your sales8 sheet ID
+// const SPREADSHEET_ID_SALES9 = "1Ql1jOzipJQHb5A_loA9AM1pvL7SidCnCV5IXvbs3Sqo"; // Replace with your sales9 sheet ID
+
+// // Sales persons mapping
+// const SALES_PERSONS = {
+//   "kushal@enersol.co.in": {
+//     name: "Kushal Bhansali",
+//     sheetId: SPREADSHEET_ID_SALES1,
+//   },
+//   "karan@enersol.co.in": {
+//     name: "Karan Bhansali",
+//     sheetId: SPREADSHEET_ID_SALES2,
+//   },
+//   "hemant@enersol.co.in": {
+//     name: "Hemant Trivedi",
+//     sheetId: SPREADSHEET_ID_SALES3,
+//   },
+//   "jay.chauhan@enersol.co.in": {
+//     name: "Jay Chauhan",
+//     sheetId: SPREADSHEET_ID_SALES4,
+//   },
+//   "subhakanta.sahoo@enersol.co.in": {
+//     name: "Shubhakanta Sahoo",
+//     sheetId: SPREADSHEET_ID_SALES5,
+//   },
+//   "akshay.panchal@enersol.co.in": {
+//     name: "Akshay Panchal",
+//     sheetId: SPREADSHEET_ID_SALES6,
+//   },
+//   "furkan.banva@enersol.co.in": {
+//     name: "Furkan Banva",
+//     sheetId: SPREADSHEET_ID_SALES7,
+//   },
+//   "User1": {
+//     name: "Test 1",
+//     sheetId: SPREADSHEET_ID_SALES8,
+//   },
+//   "User2": {
+//     name: "Test 2",
+//     sheetId: SPREADSHEET_ID_SALES9,
+//   },
+// };
+
+// // Headers for Lead and ESL Sheets in Master Sheet
+// const LEAD_HEADERS_MASTER = [
+//   "Lead ID",
+//   "Date",
+//   "Sales Person Name",
+//   "Project Type",
+//   "Lead Origin",
+//   "Client Name",
+//   "Expected Tentative Capacity",
+//   "Contact Person 1",
+//   "Designation 1",
+//   "Contact Number 1",
+//   "Contact Person 2",
+//   "Designation 2",
+//   "Contact Number 2",
+//   "Area",
+//   "Pincode",
+//   "City",
+//   "Co-Ordinates",
+//   "Remarks",
+// ];
+
+// const LEAD_HEADERS_SALESPERSON = [
+//   "Lead ID",
+//   "Date",
+//   "Project Type",
+//   "Lead Origin",
+//   "Client Name",
+//   "Expected Tentative Capacity",
+//   "Contact Person 1",
+//   "Designation 1",
+//   "Contact Number 1",
+//   "Contact Person 2",
+//   "Designation 2",
+//   "Contact Number 2",
+//   "Area",
+//   "Pincode",
+//   "City",
+//   "Co-Ordinates",
+//   "Remarks",
+// ];
+
+// const ESL_HEADERS_MASTER = [
+//   "Date",
+//   "Lead ID",
+//   "ESL Number",
+//   "Sales Person Name",
+//   "Project Type",
+//   "Date",
+//   "Client Name",
+//   "Final Capacity",
+//   "Consumer Number",
+//   "Application Number",
+//   "Address",
+//   "Co-Ordinates",
+//   "Discom",
+//   "Exe Time Contact Person",
+//   "Exe Time Contact Number",
+// ];
+
+// const ESL_HEADERS_SALESPERSON = [
+//   "Date",
+//   "Lead ID",
+//   "ESL Number",
+//   "Project Type",
+//   "Date (Blank)",
+//   "Client Name",
+//   "Final Capacity",
+//   "Consumer Number",
+//   "Application Number (Blank)",
+//   "Address",
+//   "Co-Ordinates",
+//   "Discom",
+//   "Exe Time Contact Person",
+//   "Exe Time Contact Number",
+// ];
+
+// // Middleware
+// app.use(cors());
+// app.use(bodyParser.json());
+
+// // Utility to format date to DD/MM/YYYY
+// const formatDate = (isoDate) => {
+//   const date = new Date(isoDate);
+//   return `${("0" + date.getDate()).slice(-2)}/${(
+//     "0" +
+//     (date.getMonth() + 1)
+//   ).slice(-2)}/${date.getFullYear()}`;
+// };
+
+// // Function to ensure the sheet exists and has headers
+// const ensureSheetAndHeaders = async (spreadsheetId, sheetName, headers) => {
+//   try {
+//     // Check if the sheet exists
+//     const sheetResponse = await sheets.spreadsheets.get({
+//       spreadsheetId,
+//     });
+
+//     let sheetExists = false;
+//     sheetResponse.data.sheets.forEach((sheet) => {
+//       if (sheet.properties.title === sheetName) {
+//         sheetExists = true;
+//       }
+//     });
+
+//     // Create the sheet if it doesn't exist
+//     if (!sheetExists) {
+//       await sheets.spreadsheets.batchUpdate({
+//         spreadsheetId,
+//         resource: {
+//           requests: [
+//             {
+//               addSheet: {
+//                 properties: {
+//                   title: sheetName,
+//                 },
+//               },
+//             },
+//           ],
+//         },
+//       });
+//     }
+
+//     // Ensure headers are present
+//     const range = `'${sheetName}'!A1:${String.fromCharCode(
+//       65 + headers.length - 1
+//     )}1`;
+//     const headerResponse = await sheets.spreadsheets.values.get({
+//       spreadsheetId,
+//       range,
+//     });
+
+//     if (
+//       !headerResponse.data.values ||
+//       headerResponse.data.values.length === 0
+//     ) {
+//       await sheets.spreadsheets.values.update({
+//         spreadsheetId,
+//         range: `'${sheetName}'!A1`,
+//         valueInputOption: "RAW",
+//         resource: { values: [headers] },
+//       });
+//     }
+//   } catch (error) {
+//     console.error("Error ensuring sheet and headers:", error);
+//   }
+// };
+
+// // Function to append data to a sheet
+// const appendDataToSheet = async (spreadsheetId, sheetName, data, headers) => {
+//   const values = headers.map((header) => {
+//     switch (header) {
+//       case "Lead ID":
+//         return data.leadId || "";
+//       case "Date":
+//         return data.date ? formatDate(data.date) : "";
+//       case "Sales Person Name":
+//         return data.salespersonName || "";
+//       case "Project Type":
+//         return data.projectType || "";
+//       case "Lead Origin":
+//         return data.leadOrigin || "";
+//       case "Client Name":
+//         return data.clientName || "";
+//       case "Expected Tentative Capacity":
+//         return +data.expectedTentativeCapacity || "";
+//       case "Contact Person 1":
+//         return data.contactPersonName1 || "";
+//       case "Designation 1":
+//         return data.designation1 || "";
+//       case "Contact Number 1":
+//         return +data.contactNumber1 || "";
+//       case "Contact Person 2":
+//         return data.contactPersonName2 || "";
+//       case "Designation 2":
+//         return data.designation2 || "";
+//       case "Contact Number 2":
+//         return +data.contactNumber2 || "";
+//       case "Area":
+//         return data.area || "";
+//       case "Pincode":
+//         return +data.pincode || "";
+//       case "City":
+//         return data.city || "";
+//       case "Co-Ordinates":
+//         return data.coordinates || "";
+//       case "Remarks":
+//         return data.remarks || "";
+//       case "ESL Number":
+//         return data.eslNumber || "";
+//       case "Final Capacity":
+//         return +data.finalCapacity || "";
+//       case "Consumer Number":
+//         return +data.consumerNumber || "";
+//       case "Application Number":
+//         return data.applicationNumber || "";
+//       case "Address":
+//         return data.address || "";
+//       case "Discom":
+//         return data.discom || "";
+//       case "Exe Time Contact Person":
+//         return data.exeTimeContactPerson || "";
+//       case "Exe Time Contact Number":
+//         return +data.exeTimeContactNumber || "";
+//       default:
+//         return "";
+//     }
+//   });
+
+//   await sheets.spreadsheets.values.append({
+//     spreadsheetId,
+//     range: `'${sheetName}'!A2:${String.fromCharCode(65 + headers.length - 1)}`,
+//     valueInputOption: "RAW",
+//     resource: {
+//       values: [values],
+//     },
+//   });
+// };
+
+// // Route to handle combined lead and ESL submission
+// app.post("/submit-data", async (req, res) => {
+//   const data = req.body;
+//   const salespersonEmail = data.salespersonEmail;
+
+//   if (!SALES_PERSONS[salespersonEmail]) {
+//     return res.status(400).json({ error: "Invalid salesperson email" });
+//   }
+
+//   const salesperson = SALES_PERSONS[salespersonEmail];
+//   const sheetIdSalesPerson = salesperson.sheetId;
+
+//   try {
+//     if (data.formType === "ESL") {
+//       await ensureSheetAndHeaders(SPREADSHEET_ID_MASTER, "ESL", ESL_HEADERS_MASTER);
+//       await ensureSheetAndHeaders(sheetIdSalesPerson, "ESL", ESL_HEADERS_SALESPERSON);
+
+//       await appendDataToSheet(SPREADSHEET_ID_MASTER, "ESL", data, ESL_HEADERS_MASTER);
+//       await appendDataToSheet(sheetIdSalesPerson, "ESL", data, ESL_HEADERS_SALESPERSON);
+//     } else if (data.formType === "Lead") {
+//       await ensureSheetAndHeaders(SPREADSHEET_ID_MASTER, "Lead", LEAD_HEADERS_MASTER);
+//       await ensureSheetAndHeaders(sheetIdSalesPerson, "Lead", LEAD_HEADERS_SALESPERSON);
+
+//       await appendDataToSheet(SPREADSHEET_ID_MASTER, "Lead", data, LEAD_HEADERS_MASTER);
+//       await appendDataToSheet(sheetIdSalesPerson, "Lead", data, LEAD_HEADERS_SALESPERSON);
+//     } else {
+//       return res.status(400).json({ error: "Invalid form type" });
+//     }
+
+//     res.status(200).json({ message: `${data.formType} data submitted successfully` });
+//   } catch (error) {
+//     console.error("Error submitting data:", error);
+//     res.status(500).json({ error: "Failed to submit data" });
+//   }
+// });
+
+// // Start the server
+// app.listen(port, () => {
+//   console.log(`Server running on port ${port}`);
+// });
+}
 
 // const { google } = require('googleapis');
 // const express = require('express');
