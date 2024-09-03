@@ -240,23 +240,23 @@ const appendDataToSheet = async (spreadsheetId, sheetName, data, headers) => {
       case "Client Name":
         return data.clientName || "";
       case "Expected Tentative Capacity":
-        return data.expectedTentativeCapacity || "";
+        return +data.expectedTentativeCapacity || "";
       case "Contact Person 1":
         return data.contactPersonName1 || "";
       case "Designation 1":
         return data.designation1 || "";
       case "Contact Number 1":
-        return data.contactNumber1 || "";
+        return +data.contactNumber1 || "";
       case "Contact Person 2":
         return data.contactPersonName2 || "";
       case "Designation 2":
         return data.designation2 || "";
       case "Contact Number 2":
-        return data.contactNumber2 || "";
+        return +data.contactNumber2 || "";
       case "Area":
         return data.area || "";
       case "Pincode":
-        return data.pincode || "";
+        return +data.pincode || "";
       case "City":
         return data.city || "";
       case "Co-Ordinates":
@@ -266,7 +266,7 @@ const appendDataToSheet = async (spreadsheetId, sheetName, data, headers) => {
       case "ESL Number":
         return data.eslNumber || "";
       case "Final Capacity":
-        return data.finalProjectCapacity || "";
+        return +data.finalProjectCapacity || "";
       case "Consumer Number":
         return data.consumerNumber || "";
       case "Address":
@@ -276,7 +276,7 @@ const appendDataToSheet = async (spreadsheetId, sheetName, data, headers) => {
       case "Exe Time Contact Person":
         return data.exeTimeContactPerson || "";
       case "Exe Time Contact Number":
-        return data.exeTimeContactNumber || "";
+        return +data.exeTimeContactNumber || "";
       case "Date (Blank)":
       case "Application Number (Blank)":
         return ""; // For blank columns
