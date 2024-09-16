@@ -297,13 +297,13 @@ const LEAD_HEADERS_SALESPERSON = [
 const ESL_HEADERS_MASTER = [
   "Created Date", "Lead ID", "ESL Number", "Sales Person Name", "Project Type", "Date", 
   "Client Name", "Final Capacity", "Consumer Number", "Application Number", 
-  "Address", "Co-Ordinates", "Discom", "Exe Time Contact Person", "Exe Time Contact Number"
+  "Address", "Co-Ordinates", "Discom","Contact Person","Contact Number", "Exe Time Contact Person", "Exe Time Contact Number"
 ];
 
 const ESL_HEADERS_SALESPERSON = [
   "Created Date", "Lead ID", "ESL Number", "Project Type", "Date", 
   "Client Name", "Final Capacity", "Consumer Number", "Application Number (Blank)", 
-  "Address", "Co-Ordinates", "Discom", "Exe Time Contact Person", "Exe Time Contact Number"
+  "Address", "Co-Ordinates", "Discom","Contact Person","Contact Number", "Exe Time Contact Person", "Exe Time Contact Number"
 ];
 
 // Middleware
@@ -419,6 +419,10 @@ const appendDataToSheet = async (spreadsheetId, sheetName, data, headers) => {
         return `${data.area || ''}, ${data.city || ''}, ${data.pincode || ''}`;
       case "Discom":
         return data.discom || '';
+      case "Contact Person":
+        return data.contactPerson || '';
+      case "Contact Number":
+        return data.contactNumber || '';
       case "Exe Time Contact Person":
         return data.exeTimeContactPerson || '';
       case "Exe Time Contact Number":
