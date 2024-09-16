@@ -422,7 +422,7 @@ const appendDataToSheet = async (spreadsheetId, sheetName, data, headers) => {
       case "Contact Person":
         return data.contactPerson || '';
       case "Contact Number":
-        return data.contactNumber || '';
+        return +data.contactNumber || '';
       case "Exe Time Contact Person":
         return data.exeTimeContactPerson || '';
       case "Exe Time Contact Number":
