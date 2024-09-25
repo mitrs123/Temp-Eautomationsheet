@@ -39,6 +39,15 @@ const SPREADSHEET_ID_SALES9 = "1Ql1jOzipJQHb5A_loA9AM1pvL7SidCnCV5IXvbs3Sqo"; //
 
 // Sales persons mapping
 const SALES_PERSONS = {
+  'kushal@enersol.co.in': { name: 'Kushal Bhansali', sheetId: SPREADSHEET_ID_SALES1 },
+  'karan@enersol.co.in': { name: 'Karan Bhansali', sheetId: SPREADSHEET_ID_SALES2 },
+  'hemant@enersol.co.in': { name: 'Hemant Trivedi', sheetId: SPREADSHEET_ID_SALES3 },
+  'jay.chauhan@enersol.co.in': { name: 'Jay Chauhan', sheetId: SPREADSHEET_ID_SALES4 },
+  'subhakanta.sahoo@enersol.co.in': { name: 'Subhakanta Sahoo', sheetId: SPREADSHEET_ID_SALES5 },
+  'akshay.panchal@enersol.co.in': { name: 'Akshay Panchal', sheetId: SPREADSHEET_ID_SALES6 },
+  'furkan.banva@enersol.co.in': { name: 'Furkan Banva', sheetId: SPREADSHEET_ID_SALES7 },
+  'User1': { name: 'Test 1', sheetId: SPREADSHEET_ID_SALES8 },
+  'User2': { name: 'Test 2', sheetId: SPREADSHEET_ID_SALES9 },
   "kushal@enersol.co.in": {
     name: "Kushal Bhansali",
     sheetId: SPREADSHEET_ID_SALES1,
